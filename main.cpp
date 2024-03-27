@@ -14,24 +14,27 @@ using namespace std;
 
 double pi = acos(-1);
 
-TD omega_td(50,1e-5);
+TD omega_td(350,1e-5);
 
 //slidingmode SM_controllor(1, 0.3);
-slidingmode SM_controllor(20, 20);
+slidingmode SM_controllor(35, 25);
 
 // ESO parameter
-double ESO_K1 = 1000;
-double ESO_K2 = 100;
+double w0 = 48;
+double ESO_K1 = 3*w0;
+double ESO_K2 = 3*w0*w0;
 
 pos_pid Theta_pid(47, 0, 0);
 pos_pid Omega_pid(5, 0.0001, 0);
 pos_pid Current_pid(8, 0.005, 0);
 
+pos_pid Velocity_pid(0.1, 0, 0);
 
-
+double t_init=0.3;
 double t;
 double t_last=0;
 // desired press and theta0
+double velocity_d = 0;
 double Sliprate_d = 0.05;
 double T_press_d;
 double Press_d;
@@ -186,6 +189,7 @@ double A1_rho = 1.225;
 double A1_CD = 0.2;
 double A1_Area = 120;
 double A1_CY = 1.2;
+double A1_CY_init = 1.4;
 // --------
 double A1_T0;
 double A1_Ff1;
@@ -270,30 +274,21 @@ double LLinear(double x)
 }
 
 
-// 计算滑模参数 
-void CalParam() {
-    // STATE ESTIMATION
+// 计算控制器输出 
+void Control_calculation(double t) {
 
-    //calculate desired sliprate with precise N2
-    // Miu_d = 0.5 / A1_N2 * (A1_T0 - A1_Q - A1_Ff1 - A1_M * acc_d);
-   
-
-    //calculate desired sliprate with average N2
-    // A4_mu = 0.5
     double Kn2 = 2 * (A1_a2 + A4_mu * A1_hc) / (A1_a1 - 0.0012* A1_hc);
-    N2_est = (A1_M * A1_g - (A1_rho * x[10] * x[10] * A1_CY * A1_Area / 2)) / (Kn2 + 2);
+    N2_est = (A1_M * A1_g - (A1_rho * x[10] * x[10] * A1_CY_init * A1_Area / 2)) / (Kn2 + 2);
     N1_est = N2_est * Kn2;
+    /*
+        velocity_d = 120 * 0.514 - 3.048 * (t - 0.3);
+    acc_d = 3.048 + Velocity_pid.PID_cal(x[10] - velocity_d);
     Miu_d = 0.5 / N2_est * (A1_T0 - A1_Q - N1_est * A3_mu - A1_M * acc_d);
+    Sliprate_d = 0.04 +0.06* (1 - exp(-t+0.3));
+    //Sliprate_d = 1 / A4_B * tan(1 / A4_C * asin(Miu_d / A4_D));
+    */
 
-    //calculate desired sliparet with noise N2
-    /*double N2_err = rand() % 2;
-    N2_err = pow(-1, N2_err) * rand() / float(RAND_MAX);
-    N2_est = A1_N2 * (1 + 0.10 * N2_err);
-    Miu_d = 0.5 / N2_est * (A1_T0 - A1_Q - A1_Ff1 - A1_M * acc_d);*/
-
-    // calculate desired sliprate
-   // X1d = 1 / A4_B * tan(1 / A4_C * asin(Miu_d / A4_D));
-    X1d = x[17];
+    X1d = x[10] * (1 - Sliprate_d)/A1_Rh2;
     // sliding mode
     //X1 = A4_sliprate;
     //F1 = (1 - A4_sliprate) * dx[10] / x[10] - (A1_Rh2 * A1_Rh2 / x[10] / A4_J) * A4_mu * N2_est;
@@ -303,10 +298,17 @@ void CalParam() {
     G1 = -1 / A4_J;
     DX1d = x[18];
     /*
-    double G4 = 1 / E1_L;
-    double F4 = (-(E1_Ki + E1_R) * xMid[0] * E1_KK - E1_Ce * xMid[1]) / E1_L;
-    Ueq = -F4 / G4;
+      int temp0 = SM_controllor.update(X1, DX1d, G1, F1);
+    int temp1 = SM_controllor.forefeed(X1d);
+    double sm_cal = SM_controllor.cal();
+    T_press_d = sm_cal - 1 / G1 * x[20];
+    Press_d = T_press_d / (E4_A * E4_K_init);
+    theta_d = Press_d / E3_K / tan(E3_lambda) / E2_Rbs * E2_ib;
+    omega_d = Theta_pid.PID_cal(theta_d - x[2]);
+    current_d = Omega_pid.PID_cal(omega_d - x[1]);
+    E1_U = Current_pid.PID_cal(current_d - x[0] * E1_KK);  
     */
+
 
 }
 
@@ -491,12 +493,16 @@ double simulation(double h, double t)
 {   
     int iteration_num = 0;
     double tol;
-    tol = pow(double(10), -6);
+    tol = pow(double(10), -2);
 
     double X0A, X1A, X2A, X3A, X4A, X5A, X6A, X7A, X8A, X9A, X10A, X11A, X12A, X13A, X14A, X15A, X16A, X17A, X18A, X19A, X20A;
     double D=0;
 
-
+    t_last = t;
+    if (t - t_last < 1e-2) {
+        //std::cout << "t     " <<t<< std::endl;
+    }
+    
 
     xNext[0] = x[0];
     xNext[1] = x[1];
@@ -520,33 +526,32 @@ double simulation(double h, double t)
     xNext[19] = x[19];
     xNext[20] = x[20];
    
-    if (t > 0.3) {
+    if (t > t_init) {
 
 
         t_last = t;
-        CalParam();
-        int temp0 = SM_controllor.update(X1,DX1d, G1, F1);
+        velocity_d = 120 * 0.514 - 3.048 * (t - 0.3);
+        acc_d = 3.048 + Velocity_pid.PID_cal(x[10] - velocity_d);
+        Miu_d = 0.5 / N2_est * (A1_T0 - A1_Q - N1_est * A3_mu - A1_M * acc_d);
+        //Sliprate_d = 0.04 +0.06* (1 - exp(-t+0.3));
+        Sliprate_d = 1 / A4_B * tan(1 / A4_C * asin(Miu_d / A4_D));
+        Control_calculation(t);
+        int temp0 = SM_controllor.update(X1, DX1d, G1, F1);
         int temp1 = SM_controllor.forefeed(X1d);
         double sm_cal = SM_controllor.cal();
-        T_press_d = sm_cal - 1/G1* x[20];
-        Press_d = T_press_d / (E4_A*E4_K_init);
+        T_press_d = sm_cal - 1 / G1 * x[20];
+        Press_d = T_press_d / (E4_A * E4_K_init);
         theta_d = Press_d / E3_K / tan(E3_lambda) / E2_Rbs * E2_ib;
         omega_d = Theta_pid.PID_cal(theta_d - x[2]);
         current_d = Omega_pid.PID_cal(omega_d - x[1]);
-        E1_U= Current_pid.PID_cal(current_d - x[0] * E1_KK);
-
+        E1_U = Current_pid.PID_cal(current_d - x[0] * E1_KK);
         if (E1_U > 270) {
             E1_U = 270;
         }
         if (E1_U < 0) {
             E1_U = 0;
          }
-       
-
-        // uncertainty
-        //E1_Ki = 1.6 + 0.08 * sin(100 * t);
-
-        //A1_CY = 1.2 + 0.06 *sin(20* t);
+           
 
     }
   
@@ -605,8 +610,7 @@ double simulation(double h, double t)
        D = sqrt(pow(xNext[0] - X0A, 2) + pow(xNext[1] - X1A, 2) + pow(xNext[2] - X2A, 2) + pow(xNext[3] - X3A, 2) + pow(xNext[4] - X4A, 2) + pow(xNext[5] - X5A, 2) + pow(xNext[6] - X6A, 2) + pow(xNext[7] - X7A, 2) + pow(xNext[8] - X8A, 2) + pow(xNext[9] - X9A, 2) + pow(xNext[10] - X10A, 2)
            + pow(xNext[11] - X11A, 2) + pow(xNext[12] - X12A, 2) + pow(xNext[13] - X13A, 2) + pow(xNext[14] - X14A, 2) + pow(xNext[15] - X15A, 2) + pow(xNext[16] - X16A, 2) + pow(xNext[17] - X17A, 2) + pow(xNext[18] - X18A, 2));
 
-
-
+       //std::cout << D << std::endl;
         if (D>1)
         {
             h /= 2.0;
@@ -752,7 +756,7 @@ int main(int argc, char** argv)
 
             if (t > 0.3) {
                 
-                std::cout << fixed << setprecision(4) << "t:" << "\t" << t << "\t" << "Sliprate:    " << A4_sliprate << "   Velocity    " << x[10] <<"     Deceleration    " << dx[10] << endl;
+                std::cout << fixed << setprecision(4) << "t:" << "\t" << t << "\t" <<Sliprate_d<< "   Desired  Sliprate:   Actual  " << A4_sliprate << "   Velocity    " << x[10] <<"     Deceleration    " << dx[10] << endl;
                 std::cout << fixed << setprecision(4) << "t:" << "\t" << t << "\t" << "E1_U:        " << E1_U        <<"    Mu_1       " <<A3_mu<< endl;
                 std::cout << omega_d << "  D Omega  A   " << x[1] << "   " << theta_d<<"    D theta  A   " <<x[2]<< endl;
                 std::cout << "Temperature        " << x[16] << "  q2     " << E4_q2 <<"    q1      " <<E4_q1<< endl;
@@ -766,7 +770,7 @@ int main(int argc, char** argv)
                 // 0-6  time  velocity  accleration  sliprate  efficiency  Voltage  Support_force 
                 simout << t << "\t" << x[10] << "\t" << dx[10] << "\t" << A4_sliprate << "\t" << efficiency << "\t" << E1_U << "\t" << A1_N2 <<"\t";  
                 // Temperature  E4_K   y  Desired sliprate  N2_est
-                simout <<x[16]<<"\t" <<E4_K<< "\t" <<x[13]<<"\t" << X1d <<"\t" <<N2_est<<"\t";//7-11
+                simout <<x[16]<<"\t" <<E4_K<< "\t" <<x[13]<<"\t" << Sliprate_d <<"\t" <<N2_est<<"\t";//7-11
                 // Motor angle and torque   Presure Screw_displacement
                 simout<<x[2]<<"\t" <<E1_T0 <<"\t" <<E3_Press<<"\t" <<x[9]<< endl;
 
