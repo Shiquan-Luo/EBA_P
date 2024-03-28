@@ -118,7 +118,7 @@ double E1_P;
 double E1_T0;
 double E1_Tm;
 
-double E1_KK = E1_Umax / E1_L; // 归一化
+double E1_KK = E1_Umax / E1_L; // 归一化acc
 
 // 齿轮组部分 E2
 double E2_Rbs = 0.012;
@@ -493,7 +493,7 @@ double simulation(double h, double t)
 {   
     int iteration_num = 0;
     double tol;
-    tol = pow(double(10), -2);
+    tol = pow(double(10), -6);
 
     double X0A, X1A, X2A, X3A, X4A, X5A, X6A, X7A, X8A, X9A, X10A, X11A, X12A, X13A, X14A, X15A, X16A, X17A, X18A, X19A, X20A;
     double D=0;
@@ -526,16 +526,41 @@ double simulation(double h, double t)
     xNext[19] = x[19];
     xNext[20] = x[20];
    
-    if (t > t_init) {
-
-
+    if (t > t_init) 
+    {
         t_last = t;
-        velocity_d = 120 * 0.514 - 3.048 * (t - 0.3);
-        acc_d = 3.048 + Velocity_pid.PID_cal(x[10] - velocity_d);
+        double Kn2 = 2 * (A1_a2 + A4_mu * A1_hc) / (A1_a1 - 0.0012 * A1_hc);
+        N2_est = (A1_M * A1_g - (A1_rho * x[10] * x[10] * A1_CY_init * A1_Area / 2)) / (Kn2 + 2);
+        N1_est = N2_est * Kn2;
+        velocity_d = 120 * 0.514 - 3.048 * t;
+        acc_d = -3.048 - Velocity_pid.PID_cal(x[10] - velocity_d);
         Miu_d = 0.5 / N2_est * (A1_T0 - A1_Q - N1_est * A3_mu - A1_M * acc_d);
-        //Sliprate_d = 0.04 +0.06* (1 - exp(-t+0.3));
+        if (Miu_d > 1) {
+            Miu_d = 1;
+        }
+        if (Miu_d < 0) {
+            Miu_d = 0;
+        }
+        if (Miu_d > A4_D) {
+            Miu_d = A4_D;
+        }
         Sliprate_d = 1 / A4_B * tan(1 / A4_C * asin(Miu_d / A4_D));
-        Control_calculation(t);
+        
+        
+        /*
+        std::cout << Miu_d << std::endl;
+        std::cout << A4_D << std::endl;
+        std::cout << asin(Miu_d / A4_D) << std::endl;
+        std::cout << tan(1 / A4_C * asin(Miu_d / A4_D)) << std::endl;
+        std::cout << Sliprate_d << std::endl;
+        */
+
+ 
+        X1d = x[10] * (1 - Sliprate_d) / A1_Rh2;
+        X1 = x[15];
+        F1 = A4_mu * N2_est * A1_Rh2 / A4_J;
+        G1 = -1 / A4_J;
+        DX1d = x[18];
         int temp0 = SM_controllor.update(X1, DX1d, G1, F1);
         int temp1 = SM_controllor.forefeed(X1d);
         double sm_cal = SM_controllor.cal();
@@ -545,6 +570,11 @@ double simulation(double h, double t)
         omega_d = Theta_pid.PID_cal(theta_d - x[2]);
         current_d = Omega_pid.PID_cal(omega_d - x[1]);
         E1_U = Current_pid.PID_cal(current_d - x[0] * E1_KK);
+
+        if (t > 0.392) {
+           // std::cout<<E1_U<<"\t"<<
+        }
+
         if (E1_U > 270) {
             E1_U = 270;
         }
@@ -610,7 +640,7 @@ double simulation(double h, double t)
        D = sqrt(pow(xNext[0] - X0A, 2) + pow(xNext[1] - X1A, 2) + pow(xNext[2] - X2A, 2) + pow(xNext[3] - X3A, 2) + pow(xNext[4] - X4A, 2) + pow(xNext[5] - X5A, 2) + pow(xNext[6] - X6A, 2) + pow(xNext[7] - X7A, 2) + pow(xNext[8] - X8A, 2) + pow(xNext[9] - X9A, 2) + pow(xNext[10] - X10A, 2)
            + pow(xNext[11] - X11A, 2) + pow(xNext[12] - X12A, 2) + pow(xNext[13] - X13A, 2) + pow(xNext[14] - X14A, 2) + pow(xNext[15] - X15A, 2) + pow(xNext[16] - X16A, 2) + pow(xNext[17] - X17A, 2) + pow(xNext[18] - X18A, 2));
 
-       //std::cout << D << std::endl;
+
         if (D>1)
         {
             h /= 2.0;
@@ -751,7 +781,7 @@ int main(int argc, char** argv)
         }
 
    
-        if (t - t_pre > 1E-2)
+        if (t - t_pre > 1E-3)
         {
 
             if (t > 0.3) {
@@ -759,7 +789,7 @@ int main(int argc, char** argv)
                 std::cout << fixed << setprecision(4) << "t:" << "\t" << t << "\t" <<Sliprate_d<< "   Desired  Sliprate:   Actual  " << A4_sliprate << "   Velocity    " << x[10] <<"     Deceleration    " << dx[10] << endl;
                 std::cout << fixed << setprecision(4) << "t:" << "\t" << t << "\t" << "E1_U:        " << E1_U        <<"    Mu_1       " <<A3_mu<< endl;
                 std::cout << omega_d << "  D Omega  A   " << x[1] << "   " << theta_d<<"    D theta  A   " <<x[2]<< endl;
-                std::cout << "Temperature        " << x[16] << "  q2     " << E4_q2 <<"    q1      " <<E4_q1<< endl;
+                std::cout << acc_d << "     D   ACC    A      " <<dx[10]<<"      " <<velocity_d<<"    D     Vel      A     " <<x[10]<< std::endl;
                 std::cout << "TD:       desired omega    " << x[10] * (1 - Sliprate_d )/A1_Rh2<<"   TD_ouput    " << x[17] << "   Omega2    " << x[15] << "   Omega2_hat   " << x[19] << endl;
                 std::cout << "TD test :       !!!   t   " << t << "\t" << dx[17] << "  dx[17]    dx[18]" << dx[18] << endl;
                 std::cout << "ESO test        !!!   t   " << t << "\t" << dx[19] << "  dx[19]    dx[20]" << dx[20] << "   beta     " <<x[20]<< endl;
