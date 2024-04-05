@@ -28,8 +28,8 @@ pos_pid Theta_pid(47, 0, 0);
 pos_pid Omega_pid(5, 0.0001, 0);
 pos_pid Current_pid(8, 0.005, 0);
 
-pos_pid Velocity_pid(0.1, 0, 0);
-
+pos_pid Velocity_pid(5.5, 1e-9, 0.05);
+pos_pid Accleration_pid(0.5, 0, 0);
 double t_init=0.3;
 double t;
 double t_last=0;
@@ -250,7 +250,7 @@ double dy_est, dN_Est, dFy_est;
 // TD paramter
 double* TD_output;
 
-
+double In_transition=true;
 
 // ·ûºÅº¯Êı
 int eso_sgn(double x) {
@@ -534,7 +534,8 @@ double simulation(double h, double t)
         N1_est = N2_est * Kn2;
         velocity_d = 120 * 0.514 - 3.048 * t;
         acc_d = -3.048 - Velocity_pid.PID_cal(x[10] - velocity_d);
-        Miu_d = 0.5 / N2_est * (A1_T0 - A1_Q - N1_est * A3_mu - A1_M * acc_d);
+        double acc_d_2 = acc_d - Accleration_pid.PID_cal(dx[10] - acc_d);
+        Miu_d = 0.5 / N2_est * (A1_T0 - A1_Q - N1_est * A3_mu - A1_M * acc_d_2);
         if (Miu_d > 1) {
             Miu_d = 1;
         }
@@ -544,7 +545,18 @@ double simulation(double h, double t)
         if (Miu_d > A4_D) {
             Miu_d = A4_D;
         }
+        
         Sliprate_d = 1 / A4_B * tan(1 / A4_C * asin(Miu_d / A4_D));
+        double pre_sliprate_d = 0.05 + (0.117 - 0.05) * (1 - exp(-1 * (t - t_init)));
+        if (pre_sliprate_d <= Sliprate_d) {
+            Sliprate_d = pre_sliprate_d;
+        }
+        else
+        {
+           
+            //In_transition = false;
+        }
+        
         
         
         /*
@@ -781,7 +793,7 @@ int main(int argc, char** argv)
         }
 
    
-        if (t - t_pre > 1E-3)
+        if (t - t_pre > 0.001)
         {
 
             if (t > 0.3) {
