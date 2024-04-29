@@ -16,21 +16,32 @@ double pi = acos(-1);
 
 TD omega_td(350,1e-5);
 
-//slidingmode SM_controllor(1, 0.3);
-slidingmode SM_controllor(35, 25);
 
 // ESO parameter
+//slidingmode SM_controllor(35, 25);
+slidingmode SM_controllor(200, 70);
+//None ESO parameter
+//slidingmode SM_controllor(150,100);
+// PID controller
+//pos_pid Pressure_pid(1000, 1e-2, 0);
+// ESO parameter
+//dry
+// //double w0 = 48;
 double w0 = 48;
+//wet;
+//double w0 = 200;
 double ESO_K1 = 3*w0;
 double ESO_K2 = 3*w0*w0;
 
-pos_pid Theta_pid(47, 0, 0);
+pos_pid Theta_pid(45, 0, 0);
 pos_pid Omega_pid(5, 0.0001, 0);
-pos_pid Current_pid(8, 0.005, 0);
+pos_pid Current_pid(20, 0.005, 0);
 
 pos_pid Velocity_pid(5.5, 1e-9, 0.05);
 pos_pid Accleration_pid(0.5, 0, 0);
+
 double t_init=0.3;
+//double t_init = 0.5;
 double t;
 double t_last=0;
 // desired press and theta0
@@ -49,6 +60,12 @@ double best_sliprate = 0.117;
 
 // Parameters
 
+/*
+double x[21] = { 0, 0, 0, 0, 0,
+                 0, 0, 0, 0, 0.02,
+                 120*0.514, 0, 0, 0, 0,
+                 0 ,15, 120*0.514/0.580,0,120 * 0.514 / 
+*/
 double x[21] = { 0, 0, 0, 0, 0,
                  0, 0, 0, 0, 0.02,
                  120*0.514, 0, 0, 0, 0,
@@ -101,6 +118,7 @@ double dx[21] = { 0, 0, 0, 0, 0,
 // 电机参数
 
 // 电机部分 E1
+/*
 double E1_Ki = 1.6;
 double E1_Ce = 0.9;
 double E1_L =  1.2*1E-3;
@@ -108,11 +126,20 @@ double E1_R = 16;
 double E1_Km = 1.028;
 double E1_Jm = 1.5E-4;
 double E1_bm = 0.2 * E1_Jm;
+*/
+double E1_Ki = 0;
+double E1_Ce = 0.6;
+double E1_L =  25.6*1E-3;
+double E1_R = 10.31;
+double E1_Km = 0.638;
+double E1_Jm = 1.5E-4;
+double E1_bm = 0.2 * E1_Jm;
 
 
 // --------
 double E1_Umax = 270;
 double E1_percent = 0.1;
+//double E1_percent = 0;
 double E1_U = E1_Umax*E1_percent;
 double E1_P;
 double E1_T0;
@@ -124,10 +151,10 @@ double E1_KK = E1_Umax / E1_L; // 归一化acc
 double E2_Rbs = 0.012;
 double E2_Jbs = 4E-4;
 double E2_Bbs = 0.2 * E2_Jbs;
-double E2_Rsmall = 0.01;
+double E2_Rsmall = 0.025;
 double E2_Jsmall = 5E-6;
 double E2_Bsmall = 0.2 * E2_Bsmall;
-double E2_Rbig = 0.105;
+double E2_Rbig = 0.2625;
 double E2_Jbig = 5.5E-4;
 double E2_Bbig = 0.2 * E2_Jbig;
 double E2_eta = 0.9;
@@ -175,7 +202,8 @@ double E4_m = E4_Area * E4_l * 1.75e3;
 
 
 // 飞机部分 A1
-double A1_M = 60000;
+//double A1_M = 60000;
+double A1_M = 66000;
 double A1_g = 9.8;
 double A1_I = 2810000;
 double A1_a2 = 1.4;
@@ -222,9 +250,14 @@ double A3_mid;
 
 // 主轮胎部分 A4
 double A4_J = 34;
+//// Dry runway
 double A4_D = 0.8;
 double A4_C = 1.5344;
 double A4_B = 14.0326;
+// Wet runway
+//double A4_D = 0.4;
+//double A4_C = 2.0192;
+//double A4_B = 8.2098;
 // --------
 double A4_mu;
 double A4_Mf;
@@ -290,9 +323,7 @@ void Control_calculation(double t) {
 
     X1d = x[10] * (1 - Sliprate_d)/A1_Rh2;
     // sliding mode
-    //X1 = A4_sliprate;
-    //F1 = (1 - A4_sliprate) * dx[10] / x[10] - (A1_Rh2 * A1_Rh2 / x[10] / A4_J) * A4_mu * N2_est;
-    //G1 = E4_K * A1_Rh2 * 8 / (x[10] * A4_J);
+
     X1 = x[15];
     F1 = A4_mu * N2_est * A1_Rh2 / A4_J;
     G1 = -1 / A4_J;
@@ -551,23 +582,9 @@ double simulation(double h, double t)
         if (pre_sliprate_d <= Sliprate_d) {
             Sliprate_d = pre_sliprate_d;
         }
-        else
-        {
-           
-            //In_transition = false;
-        }
-        
-        
-        
-        /*
-        std::cout << Miu_d << std::endl;
-        std::cout << A4_D << std::endl;
-        std::cout << asin(Miu_d / A4_D) << std::endl;
-        std::cout << tan(1 / A4_C * asin(Miu_d / A4_D)) << std::endl;
-        std::cout << Sliprate_d << std::endl;
-        */
 
- 
+
+
         X1d = x[10] * (1 - Sliprate_d) / A1_Rh2;
         X1 = x[15];
         F1 = A4_mu * N2_est * A1_Rh2 / A4_J;
@@ -576,16 +593,15 @@ double simulation(double h, double t)
         int temp0 = SM_controllor.update(X1, DX1d, G1, F1);
         int temp1 = SM_controllor.forefeed(X1d);
         double sm_cal = SM_controllor.cal();
-        T_press_d = sm_cal - 1 / G1 * x[20];
+        T_press_d = sm_cal -1 / G1 * x[20];
+        //T_press_d = Pressure_pid.PID_cal(X1 - X1d);
         Press_d = T_press_d / (E4_A * E4_K_init);
+        //Press_d = T_press_d / (E4_A * E4_K);
         theta_d = Press_d / E3_K / tan(E3_lambda) / E2_Rbs * E2_ib;
         omega_d = Theta_pid.PID_cal(theta_d - x[2]);
         current_d = Omega_pid.PID_cal(omega_d - x[1]);
         E1_U = Current_pid.PID_cal(current_d - x[0] * E1_KK);
 
-        if (t > 0.392) {
-           // std::cout<<E1_U<<"\t"<<
-        }
 
         if (E1_U > 270) {
             E1_U = 270;
@@ -647,8 +663,8 @@ double simulation(double h, double t)
         X18A = x[18] + h * dx[18];
         X19A = x[19] + h * dx[19];
         X20A = x[20] + h * dx[20];
-       D = sqrt(pow(xNext[0] - X0A, 2) + pow(xNext[1] - X1A, 2) + pow(xNext[2] - X2A, 2) + pow(xNext[3] - X3A, 2) + pow(xNext[4] - X4A, 2) + pow(xNext[5] - X5A, 2) + pow(xNext[6] - X6A, 2) + pow(xNext[7] - X7A, 2) + pow(xNext[8] - X8A, 2) + pow(xNext[9] - X9A, 2) + pow(xNext[10] - X10A, 2) 
-            + pow(xNext[11] - X11A, 2) + pow(xNext[12] - X12A, 2) + pow(xNext[13] - X13A, 2) + pow(xNext[14] - X14A, 2) + pow(xNext[15] - X15A, 2)+ pow(xNext[16] - X16A, 2) + pow(xNext[17] - X17A, 2) + pow(xNext[18] - X18A, 2) + pow(xNext[19] - X19A, 2)*1e-8 + pow(xNext[20] - X20A, 2)*1e-8);
+       //D = sqrt(pow(xNext[0] - X0A, 2) + pow(xNext[1] - X1A, 2) + pow(xNext[2] - X2A, 2) + pow(xNext[3] - X3A, 2) + pow(xNext[4] - X4A, 2) + pow(xNext[5] - X5A, 2) + pow(xNext[6] - X6A, 2) + pow(xNext[7] - X7A, 2) + pow(xNext[8] - X8A, 2) + pow(xNext[9] - X9A, 2) + pow(xNext[10] - X10A, 2) 
+       //     + pow(xNext[11] - X11A, 2) + pow(xNext[12] - X12A, 2) + pow(xNext[13] - X13A, 2) + pow(xNext[14] - X14A, 2) + pow(xNext[15] - X15A, 2)+ pow(xNext[16] - X16A, 2) + pow(xNext[17] - X17A, 2) + pow(xNext[18] - X18A, 2) + pow(xNext[19] - X19A, 2)*1e-8 + pow(xNext[20] - X20A, 2)*1e-8);
        D = sqrt(pow(xNext[0] - X0A, 2) + pow(xNext[1] - X1A, 2) + pow(xNext[2] - X2A, 2) + pow(xNext[3] - X3A, 2) + pow(xNext[4] - X4A, 2) + pow(xNext[5] - X5A, 2) + pow(xNext[6] - X6A, 2) + pow(xNext[7] - X7A, 2) + pow(xNext[8] - X8A, 2) + pow(xNext[9] - X9A, 2) + pow(xNext[10] - X10A, 2)
            + pow(xNext[11] - X11A, 2) + pow(xNext[12] - X12A, 2) + pow(xNext[13] - X13A, 2) + pow(xNext[14] - X14A, 2) + pow(xNext[15] - X15A, 2) + pow(xNext[16] - X16A, 2) + pow(xNext[17] - X17A, 2) + pow(xNext[18] - X18A, 2));
 
@@ -793,10 +809,10 @@ int main(int argc, char** argv)
         }
 
    
-        if (t - t_pre > 0.001)
+        if (t - t_pre > 0.05)
         {
 
-            if (t > 0.3) {
+            if (t >= 0) {
                 
                 std::cout << fixed << setprecision(4) << "t:" << "\t" << t << "\t" <<Sliprate_d<< "   Desired  Sliprate:   Actual  " << A4_sliprate << "   Velocity    " << x[10] <<"     Deceleration    " << dx[10] << endl;
                 std::cout << fixed << setprecision(4) << "t:" << "\t" << t << "\t" << "E1_U:        " << E1_U        <<"    Mu_1       " <<A3_mu<< endl;
@@ -808,7 +824,7 @@ int main(int argc, char** argv)
                 std::cout << endl;
             }
 
-            if (t > 0.3) {
+            if (t > 0) {
                 // 0-6  time  velocity  accleration  sliprate  efficiency  Voltage  Support_force 
                 simout << t << "\t" << x[10] << "\t" << dx[10] << "\t" << A4_sliprate << "\t" << efficiency << "\t" << E1_U << "\t" << A1_N2 <<"\t";  
                 // Temperature  E4_K   y  Desired sliprate  N2_est
