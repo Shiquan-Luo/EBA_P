@@ -110,6 +110,9 @@ int slidingmode::update(double X1,double dX1D, double G1, double F1){
 double slidingmode::cal(){
 
 	s1  = x1 - x1c;
+	if (s1 < -0.02) {
+		s1 = -0.02;
+	}
 	output = 1 / g1 * (-k1 * sgn(s1) - k2 * pow(abs(s1), alpha) * sgn(s1) - f1 + dx1_D);
 	return output;
 
